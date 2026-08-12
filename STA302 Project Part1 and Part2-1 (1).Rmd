@@ -1,0 +1,288 @@
+---
+title: "STA302 Project"
+author: "Carey Lin, Natalie Choy, Vinson Liang"
+date: "2025-10-07"
+output: pdf_document
+---
+```{r}
+# loading data
+library(tidyverse)
+install.packages("car")
+library(car)
+
+data <- read.csv("Life Expectancy Data.csv")
+names(data)
+
+# Creating a new cleaned data set
+
+data_cleaned <- data %>%
+  select(Life.expectancy, Year, Status, Adult.Mortality, Alcohol, BMI,
+         Schooling, GDP, Polio, Income.composition.of.resources) %>%
+  drop_na()   
+
+write.csv(data_cleaned, "Life_Expectancy_Data_cleaned.csv", row.names = FALSE)
+
+# This cleaned data set only contains the variables used in our project and removes rows with missing values.
+# This is an instruction requirement found when project part 1 was nearing completion, so this cleaned data is not mentioned in the following R code,
+# where we have used the data.frame() function to avoid missing values.
+
+```
+```{r}
+# Summaries
+summary_table <- data %>%
+  select(Life.expectancy, Adult.Mortality, Alcohol, BMI, Schooling,
+         GDP, Polio, Income.composition.of.resources) %>%
+  pivot_longer(cols = everything(),
+               names_to = "Variable", values_to = "Value") %>%
+  group_by(Variable) %>%
+  summarise(
+    Mean = round(mean(Value, na.rm = TRUE), 2),
+    Range = paste0(round(min(Value, na.rm = TRUE), 2), " - ",
+                   round(max(Value, na.rm = TRUE), 2))
+  )
+
+status_summary <- data %>%
+  count(Status)
+
+summary_table
+status_summary
+
+# Checks for NA and outliers
+colSums(is.na(data))
+
+data %>%
+  select(Life.expectancy, Adult.Mortality, GDP, Alcohol) %>%
+  pivot_longer(everything(), names_to = "Variable", values_to = "Value") %>%
+  ggplot(aes(x = Variable, y = Value)) +
+  geom_boxplot() +
+  theme_minimal()
+
+```
+
+```{r}
+# fit the model
+model <- lm(Life.expectancy ~ 
+                   Year + Status + Adult.Mortality + Alcohol + BMI +
+                   Schooling + GDP + Polio + Income.composition.of.resources +
+                   BMI:Status,
+                 data = data)
+
+summary(model)
+```
+
+```{r}
+# Checking assumptions: Residual vs Fitted
+model_data <- model.frame(model)
+
+residuals <- resid(model)
+fitted_values <- fitted(model)
+
+plot(fitted_values, residuals,
+     main = "Residuals vs Fitted Values",
+     xlab = "Fitted Values",
+     ylab = "Residuals")
+abline(h = 0, col = "red")
+```
+
+```{r}
+# Checking assumptions: Residuals vs each quantitative predictor
+
+y_value <- resid(model)
+par(mfrow = c(3,3))
+
+plot(x = model_data$Year, y = y_value,
+     main = "Residuals vs Year",
+     xlab = "Year", ylab = "Residuals")
+
+plot(x = model_data$Adult.Mortality, y = y_value,
+     main = "Residuals vs Adult Mortality",
+     xlab = "Adult Mortality", ylab = "Residuals")
+
+plot(x = model_data$Alcohol, y = y_value,
+     main = "Residuals vs Alcohol",
+     xlab = "Alcohol", ylab = "Residuals")
+
+plot(x = model_data$BMI, y = y_value,
+     main = "Residuals vs BMI",
+     xlab = "BMI", ylab = "Residuals")
+
+plot(x = model_data$Schooling, y = y_value,
+     main = "Residuals vs Schooling",
+     xlab = "Schooling", ylab = "Residuals")
+
+plot(x = model_data$GDP, y = y_value,
+     main = "Residuals vs GDP",
+     xlab = "GDP", ylab = "Residuals")
+
+plot(x = model_data$Polio, y = y_value,
+     main = "Residuals vs Polio",
+     xlab = "Polio", ylab = "Residuals")
+
+plot(x = model_data$Income.composition.of.resources, y = y_value,
+     main = "Residuals vs Income Composition of Resources",
+     xlab = "Income Composition", ylab = "Residuals")
+
+# Checking assumptions: Residual vs each categorical predictors
+
+par(mfrow = c(1,1))
+
+boxplot(y_value ~ model_data$Status,
+        main = "Residuals vs Status",
+        xlab = "Status",
+        ylab = "Residuals")
+
+# Checking assumptions: Normality
+
+qqnorm(y_value,
+       main = "Normal Q-Q Plot of Residuals",
+       xlab = "Theoretical Quantiles",
+       ylab = "Sample Quantiles")
+
+
+qqline(y_value, col = "red", lty = 2)
+```
+
+```{r}
+# Checking additional conditions for MLR
+
+y_value2 <- model_data$Life.expectancy
+x_value2 <- fitted(model)
+
+plot(x = x_value2, y = y_value2,
+     main = "Response vs Fitted Values",
+     xlab = "Fitted Values",
+     ylab = "Life Expectancy")
+abline(a = 0, b = 1, lty = 2, col = "red")
+
+pairs(model_data[, c("Year", "Adult.Mortality", "Alcohol", "BMI",
+                     "Schooling", "GDP", "Polio", "Income.composition.of.resources")])
+
+```
+```{r}
+# Apply log-transformation on GDP
+data$log_GDP <- log(data$GDP)
+
+# Dropping the not significant predictors
+# Keep BMI because interaction term is significant
+model2 <- lm(Life.expectancy ~ Status + Adult.Mortality +
+               Alcohol + BMI + Schooling + log_GDP + Polio +
+               Income.composition.of.resources + BMI:Status,
+             data = data)
+summary(model2)
+
+```
+
+```{r}
+# Remove influential points
+
+cooks2  <- cooks.distance(model2)
+cutoff2 <- 4 / length(cooks2)
+
+# Indices of influential observations
+infl2 <- which(cooks2 > cutoff2)
+
+# Create cleaned data
+data_clean <- data[-infl2, ]
+
+# Final model (model3) on cleaned data, same formula as model2
+model3 <- lm(Life.expectancy ~ Status + Adult.Mortality +
+               Alcohol + BMI + Schooling + log_GDP + Polio +
+               Income.composition.of.resources + BMI:Status,
+             data = data_clean)
+
+summary(model3)
+
+AIC(model2); AIC(model3)
+BIC(model2); BIC(model3)
+
+vif(model3)
+
+```
+
+```{r}
+# Adjust GVIF
+v <- vif(model3)
+
+# Adjust GVIF correctly
+gvif_adj <- v^(1/(2*1))
+gvif_adj
+
+```
+
+```{r}
+# Checking assumptions again
+# Resid vs Fitted
+model_data <- model.frame(model3)
+res <- resid(model3)
+fit <- fitted(model3)
+
+par(mfrow = c(1,1))
+
+plot(fit, res,
+     xlab = "Fitted values",
+     ylab = "Residuals",
+     main = "Residuals vs Fitted")
+abline(h = 0, lty = 2, col = "red")
+
+
+# Resid vs Predictors
+y_value <- residuals(model3)
+
+par(mfrow = c(3,3))
+
+plot(x = model_data$Adult.Mortality, y = y_value,
+     main = "Residuals vs Adult Mortality",
+     xlab = "Adult Mortality", ylab = "Residuals")
+abline(h = 0, lty = 2, col = "red")
+
+plot(x = model_data$Alcohol, y = y_value,
+     main = "Residuals vs Alcohol",
+     xlab = "Alcohol", ylab = "Residuals")
+abline(h = 0, lty = 2, col = "red")
+
+plot(x = model_data$BMI, y = y_value,
+     main = "Residuals vs BMI",
+     xlab = "BMI", ylab = "Residuals")
+abline(h = 0, lty = 2, col = "red")
+
+plot(x = model_data$Schooling, y = y_value,
+     main = "Residuals vs Schooling",
+     xlab = "Schooling", ylab = "Residuals")
+abline(h = 0, lty = 2, col = "red")
+
+plot(x = model_data$log_GDP, y = y_value,
+     main = "Residuals vs log(GDP)",
+     xlab = "log(GDP)", ylab = "Residuals")
+abline(h = 0, lty = 2, col = "red")
+
+plot(x = model_data$Polio, y = y_value,
+     main = "Residuals vs Polio",
+     xlab = "Polio", ylab = "Residuals")
+abline(h = 0, lty = 2, col = "red")
+
+plot(x = model_data$Income.composition.of.resources, y = y_value,
+     main = "Residuals vs Income Composition of Resources",
+     xlab = "Income Composition of Resources", ylab = "Residuals")
+abline(h = 0, lty = 2, col = "red")
+
+par(mfrow = c(1,1))
+
+boxplot(y_value ~ model_data$Status,
+        main = "Residuals vs Status",
+        xlab = "Status", ylab = "Residuals")
+abline(h = 0, lty = 2, col = "red")
+
+# Normal QQ plot
+qqnorm(y_value, main = "Normal Q-Q Plot of Residuals")
+qqline(y_value, col = "red", lwd = 2)
+```
+
+
+
+
+
+
+
+
+
+
