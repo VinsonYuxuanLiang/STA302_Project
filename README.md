@@ -57,7 +57,7 @@ Life.Expectancy ~ Year + Status + Adult.Mortality + Alcohol + BMI +
 
 ## Presentation Poster
 
-![Project 302 Poster -2 (1).pdf](https://github.com/VinsonYuxuanLiang/STA302_Project/blob/main/Project%20302%20Poster%20-2%20(1).pdf)
+![Project 302 Poster -2 (1).pdf](https://github.com/VinsonYuxuanLiang/STA302_Project/blob/main/Project%20302%20Poster%20.jpg)
 
 The poster includes:
 - Full methodology workflow
